@@ -23,6 +23,7 @@ describe "puppetca agent" do
             @agent.expects(:cert_waiting?).with("certname").returns(false)
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg=>"Removed signed cert: signed.")
         end
 
         it "should remove unsigned certs if they exist" do
@@ -34,6 +35,7 @@ describe "puppetca agent" do
 
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg=>"Removed csr: request.")
         end
 
         it "should fail if there are no certs to delete" do
@@ -43,6 +45,7 @@ describe "puppetca agent" do
 
             result = @agent.call(:clean, :certname => "certname")
             result.should be_aborted_error
+            result[:statusmsg].should == "Could not find any certs to delete"
         end
 
         it "should return the message if there are no certs but msg.size is not 0" do
@@ -52,13 +55,15 @@ describe "puppetca agent" do
             Array.any_instance.expects(:size).returns(1)
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg => "")
         end
     end
     describe "#revoke" do
         it "should revoke a cert" do
-           @agent.expects(:run).with(" --color=none --revoke 'certname'", :stdout => :output, :chomp => true)
+           @agent.expects(:run).with(" --color=none --revoke 'certname'", :stdout => :output, :chomp => true).returns("true")
            result = @agent.call(:revoke, :certname => "certname")
            result.should be_successful
+           result.should have_data_items(:out => "true")
         end
     end
 
@@ -67,6 +72,7 @@ describe "puppetca agent" do
             @agent.expects(:has_cert?).with("certname").returns(true)
             result = @agent.call(:sign, :certname => "certname")
             result.should be_aborted_error
+            result[:statusmsg] = "Already have a cert for certname not attempting to sign again"
         end
 
         it "should fail if there are no certs to sign" do
@@ -74,14 +80,16 @@ describe "puppetca agent" do
             @agent.expects(:cert_waiting?).with("certname").returns(false)
             result = @agent.call(:sign, :certname => "certname")
             result.should be_aborted_error
+            result[:statusmsg].should == "No cert found to sign"
         end
 
         it "should sign a cert if there is one waiting" do
             @agent.expects(:has_cert?).with("certname").returns(false)
             @agent.expects(:cert_waiting?).with("certname").returns(true)
-            @agent.expects(:run).with(" --color=none --sign 'certname'", :stdout => :output, :chomp => true)
+            @agent.expects(:run).with(" --color=none --sign 'certname'", :stdout => :output, :chomp => true).returns("true")
             result = @agent.call(:sign, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:out => "true")
         end
     end
 
@@ -91,6 +99,7 @@ describe "puppetca agent" do
             Dir.expects(:entries).with("/signed").returns("signed.pem")
             result = @agent.call(:list)
             result.should be_successful
+            result.should have_data_items(:signed=>["signed"], :requests=>["requested"])
         end
     end
 
@@ -102,13 +111,16 @@ describe "puppetca agent" do
             @agent.expects(:cert_waiting?).returns(false)
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg=>"Removed signed cert: signed.")
         end
+
         it "should return false if we have a signed cert matching certname" do
             @agent.stubs(:paths_for_cert).with("certname").returns({:signed => "signed", :request => "request"})
             File.expects(:exist?).with("signed").returns(false)
             @agent.expects(:cert_waiting?).returns(false)
             result = @agent.call(:clean, :certname => "certname")
             result.should be_aborted_error
+            result[:statusmsg].should == "Could not find any certs to delete"
         end
     end
 
@@ -120,6 +132,7 @@ describe "puppetca agent" do
             File.expects(:unlink).with("request")
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg=>"Removed csr: request.")
        end
 
         it "should return true if there is a signing request waiting" do
@@ -128,6 +141,7 @@ describe "puppetca agent" do
             File.expects(:exist?).with("request").returns(false)
             result = @agent.call(:clean, :certname => "certname")
             result.should be_aborted_error
+            result[:statusmsg].should == "Could not find any certs to delete"
        end
     end
 
@@ -138,6 +152,7 @@ describe "puppetca agent" do
             File.expects(:unlink).with("/requests/certname.pem")
             result = @agent.call(:clean, :certname => "certname")
             result.should be_successful
+            result.should have_data_items(:msg=>"Removed csr: /requests/certname.pem")
         end
     end
 end

@@ -10,4 +10,4 @@ RSpec::Core::RakeTask.new(:test) do |t|
     t.rspec_opts = File.read("#{specdir}/spec.opts").chomp
 end
 
-task :default => :agents
+task :default => :test

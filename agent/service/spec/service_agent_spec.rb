@@ -2,14 +2,16 @@
 
 require File.join([File.dirname(__FILE__), '/../../../spec/spec_helper'])
 
-describe "service agent" do
-    before(:all) do
-        require 'puppet'
+module Puppet
+    class Type
     end
+end
 
+describe "service agent" do
     before do
         agent_file = File.join([File.dirname(__FILE__), "../agent/puppet-service.rb"])
         @agent = MCollective::Test::LocalAgentTest.new("service", :agent_file => agent_file).plugin
+        @agent.stubs(:require).with('puppet').returns(true)
     end
 
     describe "#meta" do
@@ -54,6 +56,7 @@ describe "service agent" do
 
             result = @agent.call("stop", :service => service)
             result.should be_successful
+            result.should have_data_items({"status" => "0"})
 
         end
 
@@ -78,6 +81,7 @@ describe "service agent" do
 
             result = @agent.call("status", :service => service)
             result.should be_successful
+            result.should have_data_items({"status" => "0"})
 
         end
 
@@ -105,6 +109,7 @@ describe "service agent" do
 
             result = @agent.call("stop", :service => service)
             result.should be_successful
+            result.should have_data_items({"status" => "0"})
 
         end
 
@@ -131,6 +136,7 @@ describe "service agent" do
 
             result = @agent.call("status", :service => service)
             result.should be_successful
+            result.should have_data_items({"status" => "0"})
 
         end
 
