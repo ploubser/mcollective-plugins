@@ -56,15 +56,24 @@ module MCollective
             private
             def plugin_for_command(req)
                 ret = nil
+                fname = nil
 
                 fdir  = config.pluginconf["nrpe.conf_dir"] || "/etc/nagios/nrpe.d"
-                fname = "#{fdir}/#{req}.cfg"
+
+                if config.pluginconf["nrpe.conf_file"]
+                    fname = "#{fdir}/#{config.pluginconf['nrpe.conf_file']}"
+                else
+                    fname = "#{fdir}/#{req}.cfg"
+                end
 
                 if File.exist?(fname)
-                    t = File.readlines(fname).first.chomp
+                    t = File.readlines(fname)
+                    t.each do |check|
+                        check.chomp!
 
-                    if t =~ /command\[.+\]=(.+)$/
-                        ret = {:cmd => $1}
+                        if check =~ /command\[#{request[:command]}\]=(.+)$/
+                            ret = {:cmd => $1}
+                        end
                     end
                 end
 
