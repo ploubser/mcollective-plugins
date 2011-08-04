@@ -5,7 +5,7 @@ module MCollective
                         :description => "Agent to query NRPE commands via MCollective",
                         :author      => "R.I.Pienaar",
                         :license     => "Apache 2",
-                        :version     => "1.3",
+                        :version     => "2.0",
                         :url         => "http://projects.puppetlabs.com/projects/mcollective-plugins/wiki",
                         :timeout     => 5
 
