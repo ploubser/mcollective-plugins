@@ -21,11 +21,11 @@ module MCollective
             reply.fail "Unkown action #{action}"
           end
 
-          def install; reply.fail "error. install action has not been implemented"; end
-          def update; reply.fail "error. update action has not been implemented"; end
-          def uninstall; reply.fail "error.  uninstall action has not been implemented"; end
-          def purge; reply.fail "error. purge action has not been implemented"; end
-          def status; reply.fail "error. status action has not been implemented"; end
+          [:install, :update, :uninstall, :purge, :status].each do |act|
+            define_method act do
+              reply.fail "error. #{act} action has not been implemented"
+            end
+          end
       end
 
       metadata    :name        => "Package Agent",

@@ -3,23 +3,18 @@ module MCollective
     class PuppetPackage < Agent::Package::Implementation
       require 'puppet'
 
-      def initialize(package, action, reply)
-        super(package, action, reply)
-        @pkg = pkg_provider
-      end
-
       def install
-        reply[:output] = @pkg.install if @pkg.properties[:ensure] == :absent
+        reply[:output] = pkg_provider.install if pkg_provider.properties[:ensure] == :absent
         properties
       end
 
       def update
-        reply[:output] = @pkg.update unless @pkg.properties[:ensure] == :absent
+        reply[:output] = pkg_provider.update unless pkg_provider.properties[:ensure] == :absent
         properties
       end
 
       def uninstall
-        reply[:output] = @pkg.uninstall unless @pkg.properties[:ensure] == :absent
+        reply[:output] = pkg_provider.uninstall unless pkg_provider.properties[:ensure] == :absent
         properties
       end
 
@@ -28,21 +23,16 @@ module MCollective
       end
 
       def purge
-          reply[:output] = @pkg.purge
+          reply[:output] = pkg_provider.purge
       end
 
       def properties
-        @pkg.flush
-        reply[:properties] = @pkg.properties
+        pkg_provider.flush
+        reply[:properties] = pkg_provider.properties
       end
 
       def pkg_provider
-        if ::Puppet.version =~ /0.24/
-          ::Puppet::Type.type(:package).clear
-          pkg = ::Puppet::Type.type(:packagE).new(:name => @package).provider
-        else
-          pkg = ::Puppet::Type.type(:package).new(:name => @package).provider
-        end
+        @pkg ||= ::Puppet::Type.type(:package).new(:name => @package).provider
       end
     end
   end
