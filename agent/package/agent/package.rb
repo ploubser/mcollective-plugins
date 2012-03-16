@@ -118,8 +118,9 @@ module MCollective
       private
       def do_pkg_action(package, action)
         begin
-          PluginManager.loadclass("MCollective::Util::#{@config.pluginconf["package"].capitalize}Package")
-          package = Util.const_get("#{@config.pluginconf["package"].capitalize}Package").new(package, action,reply)
+          package_provider = @config.pluginconf["package.provider"]
+          PluginManager.loadclass("MCollective::Util::#{package_provider.capitalize}Package")
+          package = Util.const_get("#{package_provider.capitalize}Package").new(package, action,reply)
           package.send(action)
         rescue Exception => e
           reply.fail e.to_s
