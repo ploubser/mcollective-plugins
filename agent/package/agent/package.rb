@@ -8,6 +8,26 @@ module MCollective
     #
     # As this agent is based on Simple RPC, it requires mcollective 0.4.7 or newer.
     class Package<RPC::Agent
+      class Implementation
+          attr_accessor :package, :action, :reply
+
+          def initialize(package, action, reply)
+            @package = package
+            @action = action
+            @reply = reply
+          end
+
+          def method_missing(method, *args, &block)
+            reply.fail "Unkown action #{action}"
+          end
+
+          def install; reply.fail "error. install action has not been implemented"; end
+          def update; reply.fail "error. update action has not been implemented"; end
+          def uninstall; reply.fail "error.  uninstall action has not been implemented"; end
+          def purge; reply.fail "error. purge action has not been implemented"; end
+          def status; reply.fail "error. status action has not been implemented"; end
+      end
+
       metadata    :name        => "Package Agent",
                   :description => "Install and uninstall software packages",
                   :author      => "R.I.Pienaar",
@@ -100,8 +120,7 @@ module MCollective
         begin
           PluginManager.loadclass("MCollective::Util::#{@config.pluginconf["package"].capitalize}Package")
           package = Util.const_get("#{@config.pluginconf["package"].capitalize}Package").new(package, action,reply)
-          raise "do_pkg_action not inplemented" unless package.respond_to? "do_pkg_action"
-          package.do_pkg_action
+          package.send(action)
         rescue Exception => e
           reply.fail e.to_s
         end
