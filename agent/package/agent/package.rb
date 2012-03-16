@@ -1,5 +1,3 @@
-require 'puppet'
-
 module MCollective
   module Agent
     # An agent that uses Puppet to manage packages
@@ -100,39 +98,10 @@ module MCollective
       private
       def do_pkg_action(package, action)
         begin
-          if ::Puppet.version =~ /0.24/
-            ::Puppet::Type.type(:package).clear
-            pkg = ::Puppet::Type.type(:package).create(:name => package).provider
-          else
-            pkg = ::Puppet::Type.type(:package).new(:name => package).provider
-          end
-
-          reply[:output] = ""
-          reply[:properties] = "unknown"
-
-          case action
-          when :install
-            reply[:output] = pkg.install if pkg.properties[:ensure] == :absent
-
-          when :update
-            reply[:output] = pkg.update unless pkg.properties[:ensure] == :absent
-
-          when :uninstall
-            reply[:output] = pkg.uninstall unless pkg.properties[:ensure] == :absent
-
-          when :status
-            pkg.flush
-            reply[:output] = pkg.properties
-
-          when :purge
-            reply[:output] = pkg.purge
-
-          else
-            reply.fail "Unknown action #{action}"
-          end
-
-          pkg.flush
-          reply[:properties] = pkg.properties
+          PluginManager.loadclass("MCollective::Util::#{@config.pluginconf["package"].capitalize}Package")
+          package = Util.const_get("#{@config.pluginconf["package"].capitalize}Package").new(package, action,reply)
+          raise "do_pkg_action not inplemented" unless package.respond_to? "do_pkg_action"
+          package.do_pkg_action
         rescue Exception => e
           reply.fail e.to_s
         end
