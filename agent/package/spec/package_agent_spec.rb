@@ -3,7 +3,7 @@ require 'spec_helper'
 
 describe "package agent" do
   before do
-    agent_file = File.join([File.dirname(__FILE__), "../agent/puppet-package.rb"])
+    agent_file = File.join([File.dirname(__FILE__), "../agent/package.rb"])
     @agent = MCollective::Test::LocalAgentTest.new("package", :agent_file => agent_file).plugin
   end
   after :all do
@@ -186,193 +186,51 @@ describe "package agent" do
 
   describe "#do_pkg_action" do
     before(:each) do
-      @puppet_type = mock
-      @puppet_type.stubs(:clear)
-      @puppet_package = mock
+      @agent.config.stubs(:pluginconf).returns("package.provider" => "testprovider")
+      @provider = mock
+      @provider.stubs(:new).returns(@provider)
     end
 
-    describe "#puppet provider" do
-      it "should use the correct provider for version 0.24" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:install).returns(0)
-        @puppet_package.expects(:properties).twice.returns({:ensure => :absent})
-        @puppet_package.expects(:flush)
-
-        result = @agent.call(:install, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>{:ensure=>:absent}, :output=>0)
-
-      end
-
-      it "should use the correct provider for a version that is not 0.24" do
-        Puppet.expects(:version).returns("something else")
-        Puppet::Type.expects(:type).with(:package).returns(@puppet_type)
-
-        @puppet_type.expects(:new).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:install).returns(0)
-        @puppet_package.expects(:properties).twice.returns({:ensure => :absent})
-        @puppet_package.expects(:flush)
-
-        result = @agent.call(:install, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>{:ensure=>:absent}, :output=>0)
-
-      end
+    it "should load the package provider specified in pluginconf" do
+      @provider.expects(:send).with(:status)
+      MCollective::PluginManager.expects(:loadclass).with("MCollective::Util::TestproviderPackage")
+      MCollective::Util.expects(:const_get).with("TestproviderPackage").returns(@provider)
+      result = @agent.call(:status, :package => "puppet")
+      result.should be_successful
     end
 
-    describe "#install" do
-      it "should install if the package is absent" do
-        [:absent, :purged].each do |status|
-          Puppet.expects(:version).returns("0.24")
-          Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
+    it "should fail if specified package provider is not present" do
+      result = @agent.call(:status, :package => "puppet")
+      result.should be_aborted_error
+      result[:statusmsg].should == "Cannot load package provider implementation - testprovider"
+    end
 
-          @puppet_type.expects(:clear)
-          @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-          @puppet_package.expects(:provider).returns(@puppet_package)
-          @puppet_package.expects(:install).returns(0)
-          @puppet_package.expects(:properties).twice.returns({:ensure => status})
-          @puppet_package.expects(:flush)
+    it "should fail if an action hasn't been implemented by the implementation class" do
+      class TestPackage < MCollective::Agent::Package::Implementation
+      end
 
-          result = @agent.call(:install, :package => "package")
-          result.should be_successful
-          result.should have_data_items(:properties=>{:ensure=>status}, :output=>0)
+      MCollective::PluginManager.expects(:loadclass).with("MCollective::Util::TestproviderPackage")
+      MCollective::Util.expects(:const_get).with("TestproviderPackage").returns(TestPackage)
+      result = @agent.call(:status, :package => "puppet")
+      result.should be_aborted_error
+      result[:statusmsg].should == "error. status action has not been implemented"
+    end
+
+    it "should call the providers $action method if it has been implemented" do
+      class TestPackage < MCollective::Agent::Package::Implementation
+        def status
+          reply[:output] = "Status call was successful"
         end
       end
 
-      it "should not install if the package is present" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:properties).twice.returns({:ensure => "123"})
-        @puppet_package.expects(:flush)
-
-        result = @agent.call(:install, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>{:ensure=>"123"}, :output=>"")
-      end
-    end
-
-    describe "#update" do
-      it "should update unless the package is absent" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:update).returns(0)
-        @puppet_package.expects(:properties).twice.returns({:ensure => :not_absent})
-        @puppet_package.expects(:flush)
-
-        result = @agent.call(:update, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>{:ensure=>:not_absent}, :output=>0)
-      end
-
-      it "should not update if the package is not installed" do
-        [:absent, :purged].each do |status|
-          Puppet.expects(:version).returns("0.24")
-          Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-          @puppet_type.expects(:clear)
-          @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-          @puppet_package.expects(:provider).returns(@puppet_package)
-          @puppet_package.expects(:properties).twice.returns({:ensure => status})
-          @puppet_package.expects(:flush)
-
-          result = @agent.call(:update, :package => "package")
-          result.should be_successful
-          result.should have_data_items(:properties => {:ensure => status}, :output=>"")
-        end
-      end
-    end
-
-    describe "#uninstall" do
-      it "should uninstall if the package is present" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:uninstall).returns(0)
-        @puppet_package.expects(:properties).twice.returns({:ensure => :not_absent})
-        @puppet_package.expects(:flush)
-
-        result = @agent.call(:uninstall, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>{:ensure=>:not_absent}, :output=>0)
-      end
-
-      it "should not uninstall if the package is absent" do
-        [:absent, :purged].each do |status|
-          Puppet.expects(:version).returns("0.24")
-          Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-          @puppet_type.expects(:clear)
-          @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-          @puppet_package.expects(:provider).returns(@puppet_package)
-          @puppet_package.expects(:properties).twice.returns({:ensure => status})
-          @puppet_package.expects(:flush)
-
-          result = @agent.call(:uninstall, :package => "package")
-          result.should be_successful
-          result.should have_data_items(:properties => {:ensure => status}, :output => "")
-        end
-      end
-    end
-
-    describe "#status" do
-      it "should return the status of the package" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:flush).twice
-        @puppet_package.expects(:properties).twice.returns("Package Status")
-
-        result = @agent.call(:status, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>"Package Status", :output=>"Package Status")
-      end
-    end
-    describe "#purge" do
-      it "should run purge on the package object" do
-        Puppet.expects(:version).returns("0.24")
-        Puppet::Type.expects(:type).with(:package).twice.returns(@puppet_type)
-
-        @puppet_type.expects(:clear)
-        @puppet_type.expects(:create).with(:name => "package").returns(@puppet_package)
-        @puppet_package.expects(:provider).returns(@puppet_package)
-        @puppet_package.expects(:flush)
-        @puppet_package.expects(:purge).returns("Purged")
-        @puppet_package.expects(:properties)
-
-        result = @agent.call(:purge, :package => "package")
-        result.should be_successful
-        result.should have_data_items(:properties=>nil, :output=>"Purged")
-      end
-    end
-    describe "#Exceptions" do
-      it "should fail if exception is raised" do
-        Puppet.expects(:version).raises("Exception")
-        result = @agent.call(:install, :package => "package")
-        result.should be_aborted_error
-        result[:statusmsg].should == "Exception"
-      end
+      MCollective::PluginManager.expects(:loadclass).with("MCollective::Util::TestproviderPackage")
+      MCollective::Util.expects(:const_get).with("TestproviderPackage").returns(TestPackage)
+      result = @agent.call(:status, :package => "puppet")
+      result.should be_successful
+      result.should have_data_items(:output => "Status call was successful")
     end
   end
+
   describe "#do_yum_outdated_packages" do
     it "should not do anything with obsoleted packages" do
       File.expects(:exist?).with("/usr/bin/yum").returns(true)

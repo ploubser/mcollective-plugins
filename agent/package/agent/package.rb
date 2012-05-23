@@ -1,5 +1,3 @@
-require 'puppet'
-
 module MCollective
   module Agent
     # An agent that uses Puppet to manage packages
@@ -10,11 +8,30 @@ module MCollective
     #
     # As this agent is based on Simple RPC, it requires mcollective 0.4.7 or newer.
     class Package<RPC::Agent
+      class Implementation
+          attr_accessor :package, :action, :reply
+
+          def initialize(package, reply)
+            @package = package
+            @reply = reply
+          end
+
+          def method_missing(method, *args, &block)
+            reply.fail "Unkown action #{action}"
+          end
+
+          [:install, :update, :uninstall, :purge, :status].each do |act|
+            define_method act do
+              reply.fail "error. #{act} action has not been implemented"
+            end
+          end
+      end
+
       metadata    :name        => "Package Agent",
                   :description => "Install and uninstall software packages",
                   :author      => "R.I.Pienaar",
                   :license     => "ASL2",
-                  :version     => "2.2",
+                  :version     => "2.1",
                   :url         => "http://projects.puppetlabs.com/projects/mcollective-plugins/wiki",
                   :timeout     => 180
 
@@ -100,41 +117,17 @@ module MCollective
       private
       def do_pkg_action(package, action)
         begin
-          if ::Puppet.version =~ /0.24/
-            ::Puppet::Type.type(:package).clear
-            pkg = ::Puppet::Type.type(:package).create(:name => package).provider
-          else
-            pkg = ::Puppet::Type.type(:package).new(:name => package).provider
+          package_provider = @config.pluginconf["package.provider"]
+          unless package_provider
+            raise "no provider defined in server.cfg"
           end
-
-          reply[:output] = ""
-          reply[:properties] = "unknown"
-
-          case action
-          when :install
-            reply[:output] = pkg.install if [:absent, :purged].include?(pkg.properties[:ensure])
-
-          when :update
-            reply[:output] = pkg.update unless [:absent, :purged].include?(pkg.properties[:ensure])
-
-          when :uninstall
-            reply[:output] = pkg.uninstall unless [:absent, :purged].include?(pkg.properties[:ensure])
-
-          when :status
-            pkg.flush
-            reply[:output] = pkg.properties
-
-          when :purge
-            reply[:output] = pkg.purge
-
-          else
-            reply.fail "Unknown action #{action}"
-          end
-
-          pkg.flush
-          reply[:properties] = pkg.properties
+          PluginManager.loadclass("MCollective::Util::#{package_provider.capitalize}Package")
+          package = Util.const_get("#{package_provider.capitalize}Package").new(package, reply)
+          package.send(action)
+        rescue LoadError
+          reply.fail "Cannot load package provider implementation - #{@config.pluginconf["package.provider"]}"
         rescue Exception => e
-          reply.fail e.to_s
+          reply.fail e.message
         end
       end
 

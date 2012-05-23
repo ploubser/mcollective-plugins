@@ -2,7 +2,7 @@
 require 'spec_helper'
 
 describe "puppetral agent" do
-  before :all do
+  before do
     agent_file = File.join([File.dirname(__FILE__), "../agent/puppetral.rb"])
     @agent = MCollective::Test::LocalAgentTest.new("puppetral", :agent_file => agent_file).plugin
   end
